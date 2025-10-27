@@ -1,5 +1,10 @@
 package engine
 
+import (
+	"errors"
+	"strings"
+)
+
 // Color is the state of a point
 type Color int8
 
@@ -58,5 +63,100 @@ func NewBoard(size int) *Board {
 		groups:       make(map[Point]*Group),
 		history:      make([]uint64, 0),
 		koPoint:      -1, // use -1 for no active Ko point
+	}
+}
+
+// convert 1-based (x, y) coords to a Point
+func (b *Board) ToPoint(x int, y int) Point {
+	return Point(y*b.internalSize + x)
+}
+
+// convert a Point to 1-based (x, y) coords
+func (b *Board) ToXY(p Point) (int, int) {
+	if b.internalSize == 0 {
+		return 0, 0
+	}
+	y := int(p) / b.internalSize
+	x := int(p) % b.internalSize
+	return x, y
+}
+
+// returns the 4 direct neighbors of a point
+func (b *Board) Neighbors(p Point) [4]Point {
+	internalSize := Point(b.internalSize)
+	return [4]Point{
+		p - 1,            // left
+		p + 1,            // right
+		p - internalSize, // top
+		p + internalSize, // bottom
+	}
+}
+
+// returns a string representation of the board for display
+func (b *Board) String() string {
+	var sb strings.Builder
+	for y := 1; y <= b.size; y++ {
+		for x := 1; x <= b.size; x++ {
+			p := b.ToPoint(x, y)
+			switch b.points[p] {
+			case Empty:
+				sb.WriteString(". ")
+			case Black:
+				sb.WriteString("X ")
+			case White:
+				sb.WriteString("O ")
+			}
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+// validates and applies a move, returning a NEW board state
+func (b *Board) ApplyMove(move Move) (*Board, error) {
+	// point must be empty
+	if b.points[move.Point] != Empty {
+		return nil, errors.New("point is not empty")
+	}
+
+	// new board copy
+	newBoard := b.copy()
+
+	// place stone
+	newBoard.points[move.Point] = move.Color
+
+	// TODO:
+	// update groups and liberties
+	// handle captures
+	// check for suicide
+	// update Ko state
+
+	return newBoard, nil
+}
+
+// creates a deep copy of curr board state
+func (b *Board) copy() *Board {
+	newPoints := make([]Color, len(b.points))
+	copy(newPoints, b.points)
+
+	newGroups := make(map[Point]*Group, len(b.groups))
+	for k, v := range b.groups {
+		// This is a shallow copy of the group pointer.
+		// We will implement copy-on-write for group modifications later.
+		newGroups[k] = v
+	}
+
+	newHistory := make([]uint64, len(b.history))
+	copy(newHistory, b.history)
+
+	return &Board{
+		points:       newPoints,
+		size:         b.size,
+		internalSize: b.internalSize,
+		groups:       newGroups,
+		history:      newHistory,
+		koPoint:      b.koPoint,
+		koHash:       b.koHash,
+		nextGroupID:  b.nextGroupID,
 	}
 }
