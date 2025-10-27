@@ -2,29 +2,45 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/awesohame/gogo/internal/engine"
 )
 
 func main() {
-	// create board
+	fmt.Println("--- GoGo Engine Dev Test ---")
+
 	board := engine.NewBoard(9)
-	fmt.Println("--- Initial Empty Board ---")
+	fmt.Println("1. Initial 9x9 Board:")
 	fmt.Println(board)
 
-	// place black stone at (5,5)
-	move := engine.Move{
-		Point: board.ToPoint(5, 5),
-		Color: engine.Black,
-	}
+	var err error
 
-	newBoard, err := board.ApplyMove(move)
+	fmt.Println("\n2. Placing Black at (5, 5)...")
+	move1 := engine.Move{Point: board.ToPoint(5, 5), Color: engine.Black}
+	board, err = board.ApplyMove(move1)
 	if err != nil {
-		log.Fatalf("Error applying move: %v", err)
+		fmt.Printf("Error: %v\n", err)
+		return
 	}
+	fmt.Println(board)
 
-	// print board
-	fmt.Println("\n--- Board After Placing Black at (5,5) ---")
-	fmt.Println(newBoard)
+	fmt.Println("\n3. Placing White at (5, 6)...")
+	move2 := engine.Move{Point: board.ToPoint(5, 6), Color: engine.White}
+	board, err = board.ApplyMove(move2)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	fmt.Println(board)
+
+	fmt.Println("\n4. Placing Black at (4, 5) to test friendly merge...")
+	move3 := engine.Move{Point: board.ToPoint(4, 5), Color: engine.Black}
+	board, err = board.ApplyMove(move3)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	fmt.Println(board)
+
+	fmt.Println("\n--- Test Complete ---")
 }

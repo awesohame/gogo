@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"errors"
 	"strings"
 )
 
@@ -27,6 +26,7 @@ type Board struct {
 	koHash       uint64   // Zobrist hash for Ko detection
 	history      []uint64 // Zobrist hash history for superko
 	groups       map[Point]*Group
+	dsu          *DSU
 	nextGroupID  int
 }
 
@@ -61,8 +61,35 @@ func NewBoard(size int) *Board {
 		size:         size,
 		internalSize: internalSize,
 		groups:       make(map[Point]*Group),
+		dsu:          NewDSU(size * size * 2), // Max possible groups
 		history:      make([]uint64, 0),
 		koPoint:      -1, // use -1 for no active Ko point
+	}
+}
+
+// creates a deep copy of curr board state
+func (b *Board) copy() *Board {
+	newPoints := make([]Color, len(b.points))
+	copy(newPoints, b.points)
+
+	newGroups := make(map[Point]*Group, len(b.groups))
+	for k, v := range b.groups {
+		newGroups[k] = v.copy()
+	}
+
+	newHistory := make([]uint64, len(b.history))
+	copy(newHistory, b.history)
+
+	return &Board{
+		points:       newPoints,
+		size:         b.size,
+		internalSize: b.internalSize,
+		groups:       newGroups,
+		dsu:          b.dsu.copy(),
+		history:      newHistory,
+		koPoint:      b.koPoint,
+		koHash:       b.koHash,
+		nextGroupID:  b.nextGroupID,
 	}
 }
 
@@ -114,49 +141,37 @@ func (b *Board) String() string {
 
 // validates and applies a move, returning a NEW board state
 func (b *Board) ApplyMove(move Move) (*Board, error) {
-	// point must be empty
-	if b.points[move.Point] != Empty {
-		return nil, errors.New("point is not empty")
+	// validate move
+	if err := b.validatePlacement(move); err != nil {
+		return nil, err
 	}
 
-	// new board copy
+	// create a new board state by copying the current one
 	newBoard := b.copy()
 
 	// place stone
 	newBoard.points[move.Point] = move.Color
 
-	// TODO:
-	// update groups and liberties
-	// handle captures
+	// create a new group for the placed stone
+	newGroup := newBoard.createNewGroup(move.Point, move.Color)
+
+	// merge with friendly neighbor groups
+	newBoard.mergeFriendlyNeighbors(move.Point, newGroup)
+
+	// update enemy neighbor liberties
+	newBoard.updateEnemyLiberties(move.Point, move.Color)
+
+	// TODO
+	// resolve captures for any enemy groups now at 0 liberties
+	// capturedStones := newBoard.resolveCaptures(move.Point, move.Color)
+
 	// check for suicide
+	// if err := newBoard.validateSuicide(move.Point, newGroup); err != nil {
+	// 	return nil, err
+	// }
+
 	// update Ko state
+	// newBoard.updateKoState(move, capturedStones)
 
 	return newBoard, nil
-}
-
-// creates a deep copy of curr board state
-func (b *Board) copy() *Board {
-	newPoints := make([]Color, len(b.points))
-	copy(newPoints, b.points)
-
-	newGroups := make(map[Point]*Group, len(b.groups))
-	for k, v := range b.groups {
-		// This is a shallow copy of the group pointer.
-		// We will implement copy-on-write for group modifications later.
-		newGroups[k] = v
-	}
-
-	newHistory := make([]uint64, len(b.history))
-	copy(newHistory, b.history)
-
-	return &Board{
-		points:       newPoints,
-		size:         b.size,
-		internalSize: b.internalSize,
-		groups:       newGroups,
-		history:      newHistory,
-		koPoint:      b.koPoint,
-		koHash:       b.koHash,
-		nextGroupID:  b.nextGroupID,
-	}
 }
