@@ -104,6 +104,12 @@ func (b *Board) Size() int {
 	return b.size
 }
 
+// returns the color at the given coords (1-based)
+func (b *Board) At(x, y int) Color {
+	p := b.ToPoint(x, y)
+	return b.points[p]
+}
+
 // convert a Point to 1-based (x, y) coords
 func (b *Board) ToXY(p Point) (int, int) {
 	if b.internalSize == 0 {
