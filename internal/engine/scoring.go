@@ -14,19 +14,22 @@ type Score struct {
 // computes the Chinese area score (stones + territory) for curr board state
 // uses half-counting (total_points = black_score + white_score + dame)
 func (b *Board) CalculateChineseScore() Score {
+	// remove dead stones first
+	scoringBoard := b.removeDeadStones()
+
 	score := Score{}
 	visited := make(map[Point]bool)
 
 	// count stones and territories
-	for y := 1; y <= b.size; y++ {
-		for x := 1; x <= b.size; x++ {
-			p := b.ToPoint(x, y)
+	for y := 1; y <= scoringBoard.size; y++ {
+		for x := 1; x <= scoringBoard.size; x++ {
+			p := scoringBoard.ToPoint(x, y)
 
 			if visited[p] {
 				continue
 			}
 
-			color := b.points[p]
+			color := scoringBoard.points[p]
 
 			switch color {
 			case Black:
@@ -39,7 +42,7 @@ func (b *Board) CalculateChineseScore() Score {
 
 			case Empty:
 				// find territory using flood fill
-				territory, owner := b.floodFillTerritory(p, visited)
+				territory, owner := scoringBoard.floodFillTerritory(p, visited)
 				territorySize := len(territory)
 
 				switch owner {

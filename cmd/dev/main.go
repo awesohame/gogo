@@ -10,6 +10,7 @@ func main() {
 	fmt.Println("gogo engine quick test")
 	testBasicRules()
 	testScoring()
+	deadStoneTest()
 }
 
 func testBasicRules() {
@@ -167,4 +168,41 @@ func testScoring() {
 	default:
 		fmt.Println("draw")
 	}
+}
+
+func deadStoneTest() {
+	fmt.Println("\nlife/death test")
+	board := engine.NewBoard(9)
+
+	// create a dead white group in black territory
+	// black surrounds a white stone that's in atari
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(2, 2), Color: engine.White})
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(1, 2), Color: engine.Black})
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(3, 2), Color: engine.Black})
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(2, 1), Color: engine.Black})
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(2, 3), Color: engine.Black})
+
+	// add more black stones to secure territory
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(1, 1), Color: engine.Black})
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(3, 1), Color: engine.Black})
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(1, 3), Color: engine.Black})
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(3, 3), Color: engine.Black})
+
+	// add a live white group elsewhere
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(7, 7), Color: engine.White})
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(8, 7), Color: engine.White})
+	board, _ = board.ApplyMove(engine.Move{Point: board.ToPoint(7, 8), Color: engine.White})
+
+	fmt.Println("board with dead white stone at 2,2:")
+	fmt.Println(board)
+
+	score := board.CalculateChineseScore()
+	fmt.Println("scoring (should remove dead white stone)")
+	fmt.Println("black stones:", score.BlackStones)
+	fmt.Println("black territory:", score.BlackArea)
+	fmt.Println("black total:", score.Black)
+	fmt.Println("white stones:", score.WhiteStones, "(dead stones removed)")
+	fmt.Println("white territory:", score.WhiteArea)
+	fmt.Println("white total:", score.White)
+	fmt.Println("dame:", score.DamePoints)
 }
