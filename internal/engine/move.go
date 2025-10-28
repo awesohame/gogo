@@ -15,3 +15,13 @@ func (b *Board) validatePlacement(m Move) error {
 	}
 	return nil
 }
+
+// check if a move is suicidal (creates a group with zero liberties without capturing)
+// this is called AFTER captures have been resolved
+func (b *Board) validateSuicide(p Point) error {
+	group := b.groups[p]
+	if group != nil && len(group.Liberties) == 0 {
+		return errors.New("suicidal move: group has no liberties")
+	}
+	return nil
+}

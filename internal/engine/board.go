@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"strings"
 )
 
@@ -165,13 +166,19 @@ func (b *Board) ApplyMove(move Move) (*Board, error) {
 	capturedStones := newBoard.resolveCaptures(move.Point, move.Color)
 	_ = capturedStones // probably will use later for Ko logic
 
-	// check for suicide
-	// if err := newBoard.validateSuicide(move.Point, newGroup); err != nil {
-	// 	return nil, err
-	// }
+	// check for suicide (after captures are resolved)
+	if err := newBoard.validateSuicide(move.Point); err != nil {
+		return nil, err
+	}
 
-	// update Ko state
-	// newBoard.updateKoState(move, capturedStones)
+	// update board hash and check for Ko
+	newBoard.koHash = newBoard.computeHash()
+	if newBoard.isPositionRepeated() {
+		return nil, errors.New("illegal move: Ko rule violation")
+	}
+
+	// add current hash to history
+	newBoard.history = append(newBoard.history, newBoard.koHash)
 
 	return newBoard, nil
 }
