@@ -42,5 +42,32 @@ func main() {
 	}
 	fmt.Println(board)
 
+	fmt.Println("\n5. Placing Black at (6, 6) to surround White...")
+	move4 := engine.Move{Point: board.ToPoint(6, 6), Color: engine.Black}
+	board, err = board.ApplyMove(move4)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	fmt.Println(board)
+
+	fmt.Println("\n5. Placing Black at (4, 6) to surround White...")
+	move5 := engine.Move{Point: board.ToPoint(4, 6), Color: engine.Black}
+	board, err = board.ApplyMove(move5)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	fmt.Println(board)
+
+	fmt.Println("\n6. Placing Black at (5, 7) to capture White...")
+	move6 := engine.Move{Point: board.ToPoint(5, 7), Color: engine.Black}
+	board, err = board.ApplyMove(move6)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	fmt.Println(board)
+
 	fmt.Println("\n--- Test Complete ---")
 }

@@ -161,9 +161,9 @@ func (b *Board) ApplyMove(move Move) (*Board, error) {
 	// update enemy neighbor liberties
 	newBoard.updateEnemyLiberties(move.Point, move.Color)
 
-	// TODO
 	// resolve captures for any enemy groups now at 0 liberties
-	// capturedStones := newBoard.resolveCaptures(move.Point, move.Color)
+	capturedStones := newBoard.resolveCaptures(move.Point, move.Color)
+	_ = capturedStones // probably will use later for Ko logic
 
 	// check for suicide
 	// if err := newBoard.validateSuicide(move.Point, newGroup); err != nil {
