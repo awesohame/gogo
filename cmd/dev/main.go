@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/awesohame/gogo/internal/engine"
+	"github.com/awesohame/gogo/internal/game"
 )
 
 func main() {
@@ -11,6 +12,7 @@ func main() {
 	testBasicRules()
 	testScoring()
 	deadStoneTest()
+	testSession()
 }
 
 func testBasicRules() {
@@ -205,4 +207,72 @@ func deadStoneTest() {
 	fmt.Println("white territory:", score.WhiteArea)
 	fmt.Println("white total:", score.White)
 	fmt.Println("dame:", score.DamePoints)
+}
+
+func testSession() {
+	fmt.Println("\nsession test")
+	session := game.NewSession(9)
+
+	fmt.Println("new session, black's turn")
+	fmt.Println("current turn:", session.CurrentTurn())
+
+	// black makes a move
+	err := session.MakeMove(engine.Move{Point: session.CurrentBoard().ToPoint(4, 4), Color: engine.Black})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println("black played at 4,4")
+	fmt.Println("current turn:", session.CurrentTurn())
+	fmt.Println("move count:", session.MoveCount())
+
+	// white makes a move
+	err = session.MakeMove(engine.Move{Point: session.CurrentBoard().ToPoint(4, 5), Color: engine.White})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println("white played at 4,5")
+	fmt.Println("current turn:", session.CurrentTurn())
+
+	// try illegal move (wrong turn)
+	err = session.MakeMove(engine.Move{Point: session.CurrentBoard().ToPoint(5, 5), Color: engine.White})
+	if err != nil {
+		fmt.Println("wrong turn rejected:", err)
+	}
+
+	// black makes another move
+	session.MakeMove(engine.Move{Point: session.CurrentBoard().ToPoint(5, 4), Color: engine.Black})
+	fmt.Println("black played at 5,4")
+	fmt.Println("move count:", session.MoveCount())
+
+	// test undo
+	fmt.Println("\nundo test")
+	fmt.Println("can undo:", session.CanUndo())
+	session.Undo()
+	fmt.Println("undone, move count:", session.MoveCount())
+	fmt.Println("current turn:", session.CurrentTurn())
+
+	// test redo
+	fmt.Println("\nredo test")
+	fmt.Println("can redo:", session.CanRedo())
+	session.Redo()
+	fmt.Println("redone, move count:", session.MoveCount())
+	fmt.Println("current turn:", session.CurrentTurn())
+
+	// test pass
+	fmt.Println("\npass test")
+	session.Pass()
+	fmt.Println("black passed, turn:", session.CurrentTurn())
+	session.Pass()
+	fmt.Println("white passed, turn:", session.CurrentTurn())
+	fmt.Println("game over:", session.IsGameOver())
+
+	// try move after game over
+	err = session.MakeMove(engine.Move{Point: session.CurrentBoard().ToPoint(6, 6), Color: engine.Black})
+	if err != nil {
+		fmt.Println("move after game over rejected:", err)
+	}
+
+	fmt.Println("\nsession test complete")
 }
