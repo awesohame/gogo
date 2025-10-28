@@ -99,6 +99,11 @@ func (b *Board) ToPoint(x int, y int) Point {
 	return Point(y*b.internalSize + x)
 }
 
+// returns board size (9, 13, 19, etc)
+func (b *Board) Size() int {
+	return b.size
+}
+
 // convert a Point to 1-based (x, y) coords
 func (b *Board) ToXY(p Point) (int, int) {
 	if b.internalSize == 0 {
