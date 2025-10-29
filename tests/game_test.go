@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	eng "github.com/awesohame/gogo/internal/engine"
-	"github.com/awesohame/gogo/pkg/gogo/engine"
+	"github.com/awesohame/gogo/pkg/engine"
 )
 
 // TestGameCreation tests basic game initialization
