@@ -27,6 +27,12 @@ func (d *DSU) copy() *DSU {
 
 // find with path compression
 func (d *DSU) Find(i int) int {
+	// bounds check
+	if i < 0 || i >= len(d.parent) {
+		// expand dsu
+		d.expand(i + 1)
+	}
+
 	if d.parent[i] == i {
 		return i
 	}
@@ -35,8 +41,39 @@ func (d *DSU) Find(i int) int {
 	return d.parent[i]
 }
 
+// increases the DSU capacity
+func (d *DSU) expand(newSize int) {
+	if newSize <= len(d.parent) {
+		return
+	}
+
+	oldSize := len(d.parent)
+	newParent := make([]int, newSize)
+	newRank := make([]int, newSize)
+
+	copy(newParent, d.parent)
+	copy(newRank, d.rank)
+
+	// Initialize new elements
+	for i := oldSize; i < newSize; i++ {
+		newParent[i] = i
+	}
+
+	d.parent = newParent
+	d.rank = newRank
+}
+
 // Union by rank
 func (d *DSU) Union(i, j int) {
+	// ensure both indices are within bounds
+	maxIdx := i
+	if j > maxIdx {
+		maxIdx = j
+	}
+	if maxIdx >= len(d.parent) {
+		d.expand(maxIdx + 1)
+	}
+
 	rootI := d.Find(i)
 	rootJ := d.Find(j)
 	if rootI != rootJ {

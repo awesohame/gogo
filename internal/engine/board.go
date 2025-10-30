@@ -62,7 +62,7 @@ func NewBoard(size int) *Board {
 		size:         size,
 		internalSize: internalSize,
 		groups:       make(map[Point]*Group),
-		dsu:          NewDSU(size * size * 2), // Max possible groups
+		dsu:          NewDSU(size * size * 100), // extra room for MCTS
 		history:      make([]uint64, 0),
 		koPoint:      -1, // use -1 for no active Ko point
 	}
