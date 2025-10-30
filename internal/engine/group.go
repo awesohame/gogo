@@ -43,11 +43,19 @@ func (g *Group) copy() *Group {
 
 // combines the stones and liberties of another group into this one. other group should be discarded after merge
 func (g *Group) mergeWith(other *Group) {
+	// add all stones from other group
 	for stone := range other.Stones {
 		g.Stones[stone] = struct{}{}
 	}
+
+	// add liberties from other group
 	for liberty := range other.Liberties {
 		g.Liberties[liberty] = struct{}{}
+	}
+
+	// remove any liberties that are now occupied by stones in the merged group
+	for stone := range g.Stones {
+		delete(g.Liberties, stone)
 	}
 }
 

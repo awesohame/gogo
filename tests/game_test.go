@@ -784,3 +784,63 @@ func TestPassResets(t *testing.T) {
 		t.Error("Game should not be over - passes were not consecutive")
 	}
 }
+
+// TestGroupMergeCaptureScenario tests the specific bug where merging friendly groups
+// should properly remove occupied points from liberties, enabling correct capture detection
+func TestGroupMergeCaptureScenario(t *testing.T) {
+	game := engine.NewGame(9)
+
+	// Recreate the bottom-left corner scenario from the AI game
+	// where a white group should be captured after black plays at (2,9)
+	moves := []struct {
+		x, y  int
+		color eng.Color
+	}{
+		// Build the surrounding structure
+		{1, 7, eng.Black}, // Black move
+		{1, 9, eng.White}, // White corner stone
+		{2, 7, eng.Black}, // Black blocks from top
+		{2, 8, eng.White}, // White extends
+		{3, 7, eng.Black}, // Black blocks
+		{1, 8, eng.White}, // White connects to corner
+		{4, 8, eng.Black}, // Black blocks from right
+		{3, 8, eng.White}, // White completes group
+		{3, 9, eng.Black}, // Black prepares for the killing move
+		{5, 5, eng.White}, // White plays elsewhere (dummy)
+		// Critical move: Black plays at (2,9), merges with (3,9), should capture white group
+		{2, 9, eng.Black},
+	}
+
+	for i, m := range moves {
+		move := game.NewMove(m.x, m.y, m.color)
+		err := game.MakeMove(move)
+		if err != nil {
+			t.Fatalf("Move %d at (%d,%d) color=%v failed: %v\nBoard:\n%s",
+				i+1, m.x, m.y, m.color, err, game.CurrentBoard().String())
+		}
+	}
+
+	// After black plays at (2,9), the white group should be captured
+	// Check that positions (1,9), (1,8), (2,8), (3,8) are now empty
+	board := game.CurrentBoard()
+	whiteCapturedPositions := []struct{ x, y int }{
+		{1, 9}, {1, 8}, {2, 8}, {3, 8},
+	}
+
+	for _, pos := range whiteCapturedPositions {
+		if board.At(pos.x, pos.y) != eng.Empty {
+			t.Errorf("Position (%d,%d) should be empty (white captured), but has color %v\nBoard:\n%s",
+				pos.x, pos.y, board.At(pos.x, pos.y), board.String())
+		}
+	}
+
+	// Verify the black stones are still there
+	blackPositions := []struct{ x, y int }{
+		{2, 9}, {3, 9},
+	}
+	for _, pos := range blackPositions {
+		if board.At(pos.x, pos.y) != eng.Black {
+			t.Errorf("Position (%d,%d) should have black stone", pos.x, pos.y)
+		}
+	}
+}

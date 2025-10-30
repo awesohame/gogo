@@ -73,9 +73,22 @@ func (b *Board) copy() *Board {
 	newPoints := make([]Color, len(b.points))
 	copy(newPoints, b.points)
 
+	// check if all groups are proper
 	newGroups := make(map[Point]*Group, len(b.groups))
+	groupCopies := make(map[int]*Group) // map from group ID to copied group
+
 	for k, v := range b.groups {
-		newGroups[k] = v.copy()
+		if v != nil {
+			// check if group is already copied
+			if copiedGroup, exists := groupCopies[v.ID]; exists {
+				newGroups[k] = copiedGroup
+			} else {
+				// no copy exists, make copy
+				copiedGroup := v.copy()
+				groupCopies[v.ID] = copiedGroup
+				newGroups[k] = copiedGroup
+			}
+		}
 	}
 
 	newHistory := make([]uint64, len(b.history))
