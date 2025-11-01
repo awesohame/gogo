@@ -117,6 +117,11 @@ func (b *Board) Size() int {
 	return b.size
 }
 
+// returns zobrist hash of curr board
+func (b *Board) Hash() uint64 {
+	return b.koHash
+}
+
 // returns the color at the given coords (1-based)
 func (b *Board) At(x, y int) Color {
 	p := b.ToPoint(x, y)

@@ -11,9 +11,11 @@ import (
 
 // MCTSBot implements Monte Carlo Tree Search
 type MCTSBot struct {
-	MaxSimulations int     // no. of simulations to run
-	TimeLimit      float64 // time limit in sec (if 0, uses MaxSimulations)
-	ExplorationC   float64 // UCB exploration const (sqrt 2)
+	MaxSimulations int       // no. of simulations to run
+	TimeLimit      float64   // time limit in sec (if 0, uses MaxSimulations)
+	ExplorationC   float64   // UCB exploration const (sqrt 2)
+	ReuseTree      bool      // whether to reuse tree between moves
+	lastRoot       *MCTSNode // root from previous move for tree reuse
 }
 
 // NewMCTSBot creates a new MCTS bot
@@ -22,13 +24,28 @@ func NewMCTSBot(simulations int) *MCTSBot {
 		MaxSimulations: simulations,
 		TimeLimit:      0, // no time lim by default
 		ExplorationC:   math.Sqrt(2),
+		ReuseTree:      true, // tree reuse by default
 	}
 }
 
 // implements the Bot interface using MCTS
 func (bot *MCTSBot) SelectMove(board *engine.Board, color engine.Color) engine.Move {
 	previousColor := opponentColor(color)
-	root := newMCTSNode(nil, engine.Move{Point: -1, Color: previousColor}, board, previousColor)
+
+	// Try to reuse tree from previous move
+	var root *MCTSNode
+	if bot.ReuseTree && bot.lastRoot != nil {
+		// Find child matching current board position
+		root = bot.findMatchingChild(bot.lastRoot, board)
+		if root != nil {
+			root.parent = nil // detach from old tree
+		}
+	}
+
+	// If no reuse, create new root
+	if root == nil {
+		root = newMCTSNode(nil, engine.Move{Point: -1, Color: previousColor}, board, previousColor)
+	}
 
 	startTime := time.Now()
 	simulations := 0
@@ -43,8 +60,14 @@ func (bot *MCTSBot) SelectMove(board *engine.Board, color engine.Color) engine.M
 			break
 		}
 
+		// adaptive exploration: reduce exploration as we get more confident
+		explorationC := bot.ExplorationC
+		if simulations > bot.MaxSimulations/2 {
+			explorationC *= 0.8 // reduce exploration in later phase
+		}
+
 		// MCTS -> selection, expansion, simulation, backpropagation
-		node := root.selectNode(bot.ExplorationC)
+		node := root.selectNode(explorationC)
 		winner := node.simulate()
 		node.backpropagate(winner)
 
@@ -55,13 +78,31 @@ func (bot *MCTSBot) SelectMove(board *engine.Board, color engine.Color) engine.M
 	bestChild := root.bestChild(0) // 0 means no exploration
 	if bestChild == nil {
 		// pass when no legal moves
+		bot.lastRoot = nil
 		return engine.Move{Point: -1, Color: color}
+	}
+
+	// Save tree for reuse
+	if bot.ReuseTree {
+		bot.lastRoot = bestChild
 	}
 
 	fmt.Printf("MCTS: %d simulations, selected move with %d visits (%.1f%% win rate)\n",
 		simulations, bestChild.visits, 100.0*bestChild.wins/float64(bestChild.visits))
 
 	return bestChild.move
+}
+
+// attempts to find a child node matching the current board
+func (bot *MCTSBot) findMatchingChild(node *MCTSNode, board *engine.Board) *MCTSNode {
+	// zobrist hash to find matching child position
+	targetHash := board.Hash()
+	for _, child := range node.children {
+		if child.board.Hash() == targetHash {
+			return child
+		}
+	}
+	return nil
 }
 
 // MCTSNode represents a node in the MCTS tree
@@ -89,11 +130,63 @@ func newMCTSNode(parent *MCTSNode, move engine.Move, board *engine.Board, color 
 		wins:     0,
 	}
 
-	// get all legal moves for the next player
+	// get all legal moves for the next player (lazily, only if needed)
 	nextColor := opponentColor(color)
-	node.untriedMoves = getLegalMoves(board, nextColor)
+	node.untriedMoves = getLegalMovesFast(board, nextColor)
 
 	return node
+}
+
+// faster legal move generation that doesn't validate every move
+func getLegalMovesFast(board *engine.Board, color engine.Color) []engine.Move {
+	moves := make([]engine.Move, 0, 40)
+	size := board.Size()
+
+	// prioritize center and corner/edge positions early
+	priorityMoves := make([]engine.Move, 0, 20)
+	normalMoves := make([]engine.Move, 0, 20)
+
+	center := size / 2
+
+	for y := 1; y <= size; y++ {
+		for x := 1; x <= size; x++ {
+			// only consider empty points
+			if board.At(x, y) != engine.Empty {
+				continue
+			}
+
+			point := board.ToPoint(x, y)
+			move := engine.Move{Point: point, Color: color}
+
+			// quick heuristic: skip obvious eye fills
+			if IsEyeFillingMove(board, move) {
+				continue
+			}
+
+			// prioritize center area and corners/edges
+			distFromCenter := abs(x-center) + abs(y-center)
+			isEdge := x == 1 || x == size || y == 1 || y == size
+
+			if distFromCenter <= 2 || isEdge {
+				priorityMoves = append(priorityMoves, move)
+			} else {
+				normalMoves = append(normalMoves, move)
+			}
+		}
+	}
+
+	// return priority moves first, then normal moves
+	moves = append(moves, priorityMoves...)
+	moves = append(moves, normalMoves...)
+
+	return moves
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 // traverses the tree using UCB1 until a leaf node
@@ -114,17 +207,25 @@ func (n *MCTSNode) selectNode(explorationC float64) *MCTSNode {
 
 // adds a new child node for an untried move
 func (n *MCTSNode) expand() *MCTSNode {
+	if len(n.untriedMoves) == 0 {
+		return n
+	}
+
 	// pick random untried move
 	idx := rand.Intn(len(n.untriedMoves))
 	move := n.untriedMoves[idx]
 
-	// remove from untried moves
-	n.untriedMoves = append(n.untriedMoves[:idx], n.untriedMoves[idx+1:]...)
+	// remove from untried moves (swap with last for efficiency)
+	n.untriedMoves[idx] = n.untriedMoves[len(n.untriedMoves)-1]
+	n.untriedMoves = n.untriedMoves[:len(n.untriedMoves)-1]
 
 	// apply move
 	newBoard, err := n.board.ApplyMove(move)
 	if err != nil {
-		// fix getLegalMoves if this happens
+		// move became illegal, try another if available
+		if len(n.untriedMoves) > 0 {
+			return n.expand()
+		}
 		return n
 	}
 
@@ -140,12 +241,25 @@ func (n *MCTSNode) simulate() engine.Color {
 	board := n.board
 	currentColor := opponentColor(n.color)
 	passCount := 0
-	maxMoves := 200 // limit simulation length
+	maxMoves := 150
 	moveCount := 0
 
+	// early termination score threshold
+	earlyCheckInterval := 30
+
 	for moveCount < maxMoves {
+		// early termination check - if one side is clearly winning, end simulation
+		if moveCount > 0 && moveCount%earlyCheckInterval == 0 {
+			blackScore, whiteScore, _ := board.CalculateScoreWithKomi(6.5)
+			scoreDiff := blackScore - whiteScore
+			// if score difference is huge, end early
+			if scoreDiff > 20 || scoreDiff < -20 {
+				break
+			}
+		}
+
 		// fast legal move generation with caching
-		legalMoves := getFastLegalMoves(board, currentColor, 30) // limit candidates
+		legalMoves := getFastLegalMoves(board, currentColor, 25) // reduced from 30
 
 		if len(legalMoves) == 0 {
 			passCount++
@@ -173,9 +287,7 @@ func (n *MCTSNode) simulate() engine.Color {
 	}
 
 	// get winner by score
-	blackScore, whiteScore, winner := board.CalculateScoreWithKomi(6.5)
-	_ = blackScore
-	_ = whiteScore
+	_, _, winner := board.CalculateScoreWithKomi(0)
 
 	return winner
 }
@@ -234,42 +346,15 @@ func (n *MCTSNode) ucb1Score(explorationC float64) float64 {
 	return exploitation + exploration
 }
 
-// returns all legal moves for the given color
-func getLegalMoves(board *engine.Board, color engine.Color) []engine.Move {
-	moves := make([]engine.Move, 0, 30) // preallocate capacity
-	size := board.Size()
-
-	for y := 1; y <= size; y++ {
-		for x := 1; x <= size; x++ {
-			point := board.ToPoint(x, y)
-
-			// only consider empty points
-			if board.At(x, y) != engine.Empty {
-				continue
-			}
-
-			move := engine.Move{Point: point, Color: color}
-
-			// try to apply move
-			_, err := board.ApplyMove(move)
-			if err == nil {
-				moves = append(moves, move)
-			}
-		}
-	}
-
-	return moves
-}
-
 // returns a limited set of legal moves for fast simulation
 func getFastLegalMoves(board *engine.Board, color engine.Color, maxMoves int) []engine.Move {
 	moves := make([]engine.Move, 0, maxMoves)
 	size := board.Size()
 
-	// random sampling for speed
-	tried := make(map[engine.Point]bool)
+	// use map for correct indexing with internal board points
+	tried := make(map[engine.Point]bool, size*size)
 	attempts := 0
-	maxAttempts := size * size
+	maxAttempts := min(size*size, maxMoves*3) // limit attempts
 
 	for len(moves) < maxMoves && attempts < maxAttempts {
 		// random point
@@ -289,8 +374,8 @@ func getFastLegalMoves(board *engine.Board, color engine.Color, maxMoves int) []
 			continue
 		}
 
-		// dont fill own eyes
-		if IsEyeFillingMove(board, engine.Move{Point: point, Color: color}) {
+		// dont fill own eyes (skip check in late game for speed)
+		if len(moves) < maxMoves/2 && IsEyeFillingMove(board, engine.Move{Point: point, Color: color}) {
 			continue
 		}
 
@@ -303,7 +388,7 @@ func getFastLegalMoves(board *engine.Board, color engine.Color, maxMoves int) []
 		}
 	}
 
-	// if we didnt find enough moves, use search to get moves
+	// if we didnt find enough moves, use systematic search
 	if len(moves) < 5 {
 		for y := 1; y <= size && len(moves) < maxMoves; y++ {
 			for x := 1; x <= size && len(moves) < maxMoves; x++ {
@@ -323,4 +408,11 @@ func getFastLegalMoves(board *engine.Board, color engine.Color, maxMoves int) []
 	}
 
 	return moves
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
